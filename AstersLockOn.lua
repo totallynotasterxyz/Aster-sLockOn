@@ -51,6 +51,7 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PremiumLockOnGui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true 
+ScreenGui.DisplayOrder = 999 -- Forced to render on top of all other game UIs
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local TargetPanel = Instance.new("Frame")
@@ -131,17 +132,17 @@ DistanceText.Parent = TargetPanel
 -- ==========================================
 local LocalDamageText = Instance.new("TextLabel")
 LocalDamageText.Size = UDim2.new(0, 200, 0, 50)
-LocalDamageText.Position = UDim2.new(0.5, 0, 0.75, 0) -- Lower center of screen
+LocalDamageText.Position = UDim2.new(0.5, 0, 0.75, 0)
 LocalDamageText.AnchorPoint = Vector2.new(0.5, 0.5)
 LocalDamageText.BackgroundTransparency = 1
 LocalDamageText.Font = Enum.Font.GothamBlack
 LocalDamageText.Text = ""
-LocalDamageText.TextColor3 = Color3.fromRGB(255, 40, 40)
+LocalDamageText.TextColor3 = Color3.fromRGB(255, 255, 255)
 LocalDamageText.TextSize = 0
 LocalDamageText.TextTransparency = 1
 LocalDamageText.TextStrokeTransparency = 1
 LocalDamageText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-LocalDamageText.ZIndex = 10
+LocalDamageText.ZIndex = 9999 -- Maximum priority
 LocalDamageText.Parent = ScreenGui
 
 -- ==========================================
@@ -359,20 +360,27 @@ local function triggerLocalImpactEffects(damage, maxHealth)
 
 	-- 2. Screen Space Hitmarker & Shake
 	myHitComboDamage += damage
+	local comboRatio = myHitComboDamage / maxHealth
+	
+	-- Dynamic color mapping identical to enemy tracking
+	local hitColor = Color3.fromRGB(255, 255, 255)
+	if comboRatio >= 0.3 then hitColor = Color3.fromRGB(255, 50, 50)
+	elseif comboRatio >= 0.15 then hitColor = Color3.fromRGB(255, 150, 50)
+	elseif comboRatio >= 0.05 then hitColor = Color3.fromRGB(255, 200, 50) end
+
 	LocalDamageText.Text = "-" .. math.floor(myHitComboDamage)
+	LocalDamageText.TextColor3 = hitColor
 	LocalDamageText.TextTransparency = 0
 	LocalDamageText.TextStrokeTransparency = 0.3
 	
 	local basePos = UDim2.new(0.5, 0, 0.75, 0)
-	local shakeMag = math.clamp(damageRatio * 60, 10, 40) -- Shake magnitude in pixels
+	local shakeMag = math.clamp(damageRatio * 60, 10, 40)
 
-	-- Violent pop and shake
 	TweenService:Create(LocalDamageText, TweenInfo.new(0.05, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out), {
 		Position = basePos + UDim2.new(0, math.random(-shakeMag, shakeMag), 0, math.random(-shakeMag, shakeMag)),
 		TextSize = 55
 	}):Play()
 	
-	-- Snap back
 	task.delay(0.05, function()
 		TweenService:Create(LocalDamageText, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Position = basePos,
@@ -386,7 +394,7 @@ local function triggerLocalImpactEffects(damage, maxHealth)
 		TweenService:Create(LocalDamageText, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 			TextTransparency = 1,
 			TextStrokeTransparency = 1,
-			Position = basePos + UDim2.new(0, 0, 0.05, 0) -- Float down slightly to disappear
+			Position = basePos + UDim2.new(0, 0, 0.05, 0)
 		}):Play()
 		
 		task.delay(0.4, function()
@@ -603,7 +611,7 @@ RunService:BindToRenderStep("LockOnSystem", Enum.RenderPriority.Camera.Value + 1
 	local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 	local myHumanoid = myCharacter and myCharacter:FindFirstChild("Humanoid")
 	
-	-- TRACK LOCAL PLAYER HEALTH (Always active, even when not locked on)
+	-- TRACK LOCAL PLAYER HEALTH
 	if myHumanoid then
 		local currentMyHealth = math.floor(myHumanoid.Health)
 		local myMaxHealth = math.floor(myHumanoid.MaxHealth)
@@ -649,10 +657,7 @@ RunService:BindToRenderStep("LockOnSystem", Enum.RenderPriority.Camera.Value + 1
 		if meAlive and targetAlive then
 			local targetPos = targetRoot.Position
 			
-			if myHumanoid:GetState() ~= Enum.HumanoidStateType.Physics then
-				myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
-			end
-			
+			-- Fully Custom Scriptable Camera (Strict Lock + Zoom Only)
 			local focusPos = myRoot.Position + Vector3.new(0, 1.5, 0) 
 			local lookDir = (targetPos - focusPos).Unit
 			
